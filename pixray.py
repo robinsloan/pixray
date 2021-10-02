@@ -765,7 +765,7 @@ def checkin(args, iter, losses):
 
     if args.output_svg:
         try:
-            drawer.to_svg(output_svg)
+            drawer.to_svg(args.output_svg)
         except AttributeError:
             print("You specified an output SVG file, but it looks like your drawer doesn't offer that.")
 
