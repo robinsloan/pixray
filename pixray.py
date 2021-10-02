@@ -899,6 +899,10 @@ def ascend_txt(args):
 
         result.append( -colorfullness*args.saturation/5.0 )
 
+    if args.point_dist:
+        median_dist = drawer.get_median_point_dist()
+        result.append( median_dist * args.point_dist )
+
     for cutoutSize in cutoutsTable:
         # clear the transform "cache"
         make_cutouts = cutoutsTable[cutoutSize]
@@ -1242,6 +1246,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-smo",  "--smoothness", type=float, help="encourage smoothness, 0 -- skip", default=0, dest='smoothness')
     vq_parser.add_argument("-est",  "--smoothness_type", type=str, help="enforce smoothness type: default/clipped/log", default='default', dest='smoothness_type')
     vq_parser.add_argument("-sat",  "--saturation", type=float, help="encourage saturation, 0 -- skip", default=0, dest='saturation')
+    vq_parser.add_argument("-pdist",  "--point_dist", type=float, help="encourage saturation, 0 -- skip", default=0, dest='point_dist')
 
     return vq_parser
 
