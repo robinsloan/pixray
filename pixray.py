@@ -18,8 +18,8 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import transforms
 from torchvision.transforms import functional as TF
-torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
-#torch.use_deterministic_algorithms(True)		# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
+torch.backends.cudnn.benchmark = False    # NR: True is a bit faster, but can lead to OOM. False is more deterministic.
+#torch.use_deterministic_algorithms(True)   # NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
 
 from torch_optimizer import DiffGrad, AdamP, RAdam
 from perlin_numpy import generate_fractal_noise_2d
@@ -170,7 +170,7 @@ def gradient_3d(width, height, start_list, stop_list, is_horizontal_list):
 
     return result
 
-    
+
 def random_gradient_image(w,h):
     array = gradient_3d(w, h, (0, 0, np.random.randint(0,255)), (np.random.randint(1,255), np.random.randint(2,255), np.random.randint(3,128)), (True, False, False))
     random_image = Image.fromarray(np.uint8(array))
@@ -303,7 +303,7 @@ class MakeCutouts(nn.Module):
         self.augs_wide = nn.Sequential(*augmentations)
 
         self.noise_fac = 0.1
-        
+
         # Pooling
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
         self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
@@ -370,7 +370,7 @@ class MakeCutouts(nn.Module):
             #         TF.to_pil_image(batch[j_wide].cpu()).save(f"live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
 
         # print(batch.shape, self.transforms.shape)
-        
+
         if self.noise_fac:
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
@@ -459,7 +459,7 @@ def do_init(args):
 
         cut_size = perceptor.visual.input_resolution
         cutoutSizeTable[clip_model] = cut_size
-        if not cut_size in cutoutsTable:    
+        if not cut_size in cutoutsTable:
             make_cutouts = MakeCutouts(cut_size, args.num_cuts, cut_pow=args.cut_pow)
             cutoutsTable[cut_size] = make_cutouts
 
@@ -676,8 +676,8 @@ cutoutSizeTable = {}
 init_image_tensor = None
 target_image_tensor = None
 pmsTable = None
-spotPmsTable = None 
-spotOffPmsTable = None 
+spotPmsTable = None
+spotOffPmsTable = None
 pmsImageTable = None
 gside_X=None
 gside_Y=None
@@ -688,7 +688,7 @@ cur_anim_index=None
 anim_output_files=[]
 anim_cur_zs=[]
 anim_next_zs=[]
-best_loss = None 
+best_loss = None
 best_iter = None
 best_z = None
 num_loss_drop = 0
@@ -762,6 +762,13 @@ def checkin(args, iter, losses):
     else:
         outfile = anim_output_files[cur_anim_index]
     img.save(outfile, pnginfo=info)
+
+    if args.output_svg:
+        try:
+            drawer.to_svg(output_svg)
+        except AttributeError:
+            print("You specified an output SVG file, but it looks like your drawer doesn't offer that.")
+
     if cur_anim_index == len(anim_output_files) - 1:
         # save gif
         gif_output = make_gif(args, iter)
@@ -835,7 +842,7 @@ def ascend_txt(args):
             pImages = pmsImageTable[clip_model]
         else:
             pImages = [ pmsImageTable[clip_model][cur_anim_index] ]
-        
+
         for timg in pImages:
             # note: this caches and reuses the transforms - a bit of a hack but it works
 
@@ -951,7 +958,7 @@ def ascend_txt(args):
         cur_loss = F.cosine_embedding_loss(f, f2, y) * args.init_weight_cos
         result.append(cur_loss)
 
-    if args.make_video:    
+    if args.make_video:
         img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
         img = np.transpose(img, (1, 2, 0))
         imageio.imwrite(f'./steps/frame_{cur_iteration:04d}.png', np.array(img))
@@ -1199,7 +1206,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-asp",  "--aspect", type=str, help="widescreen, square", default="widescreen", dest='aspect')
     vq_parser.add_argument("-ezs",  "--ezsize", type=str, help="small, medium, large", default=None, dest='ezsize')
     vq_parser.add_argument("-sca",  "--scale", type=float, help="scale (instead of ezsize)", default=None, dest='scale')
-    vq_parser.add_argument("-ova",  "--overlay_alpha", type=int, help="Overlay alpha (0-255)", default=None, dest='overlay_alpha')    
+    vq_parser.add_argument("-ova",  "--overlay_alpha", type=int, help="Overlay alpha (0-255)", default=None, dest='overlay_alpha')
     vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=None, dest='size')
     vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
     vq_parser.add_argument("-iia",  "--init_image_alpha", type=int, help="Init image alpha (0-255)", default=200, dest='init_image_alpha')
@@ -1207,7 +1214,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-ti",   "--target_images", type=str, help="Target images", default=None, dest='target_images')
     vq_parser.add_argument("-tiw",  "--target_image_weight", type=float, help="Target images weight", default=1.0, dest='target_image_weight')
     vq_parser.add_argument("-twp",  "--target_weight_pix", type=float, help="Target weight pix loss", default=0., dest='target_weight_pix')
-    vq_parser.add_argument("-anim", "--animation_dir", type=str, help="Animation output dir", default=None, dest='animation_dir')    
+    vq_parser.add_argument("-anim", "--animation_dir", type=str, help="Animation output dir", default=None, dest='animation_dir')
     vq_parser.add_argument("-ana",  "--animation_alpha", type=int, help="Forward blend for consistency", default=128, dest='animation_alpha')
     vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight (main=spherical)", default=None, dest='init_weight')
     vq_parser.add_argument("-iwd",  "--init_weight_dist", type=float, help="Initial weight dist loss", default=0., dest='init_weight_dist')
@@ -1225,6 +1232,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
+    vq_parser.add_argument("-o",    "--output_svg", type=str, help="Output file for raw SVG", default=None, dest='output_svg')
     vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
     vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
     vq_parser.add_argument("-mo",   "--do_mono", type=bool, help="Monochromatic", default=False, dest='do_mono')
