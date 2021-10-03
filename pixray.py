@@ -769,6 +769,12 @@ def checkin(args, iter, losses):
         except AttributeError:
             print("You specified an output SVG file, but it looks like your drawer doesn't offer that.")
 
+    if args.output_json:
+        try:
+            drawer.to_svg(args.output_json)
+        except AttributeError:
+            print("You specified an output SVG file, but it looks like your drawer doesn't offer that.")
+
     if cur_anim_index == len(anim_output_files) - 1:
         # save gif
         gif_output = make_gif(args, iter)
@@ -898,10 +904,6 @@ def ascend_txt(args):
         colorfullness = std_rggb+.3*mean_rggb
 
         result.append( -colorfullness*args.saturation/5.0 )
-
-    if args.point_dist:
-        median_dist = drawer.get_median_point_dist()
-        result.append( torch.tensor(median_dist) * args.point_dist )
 
     for cutoutSize in cutoutsTable:
         # clear the transform "cache"
@@ -1237,6 +1239,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
     vq_parser.add_argument("-osvg",    "--output_svg", type=str, help="Output file for raw SVG", default=None, dest='output_svg')
+    vq_parser.add_argument("-ojson",    "--output_json", type=str, help="Output file for points as JSON", default=None, dest='output_json')
     vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
     vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
     vq_parser.add_argument("-mo",   "--do_mono", type=bool, help="Monochromatic", default=False, dest='do_mono')
@@ -1246,7 +1249,6 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-smo",  "--smoothness", type=float, help="encourage smoothness, 0 -- skip", default=0, dest='smoothness')
     vq_parser.add_argument("-est",  "--smoothness_type", type=str, help="enforce smoothness type: default/clipped/log", default='default', dest='smoothness_type')
     vq_parser.add_argument("-sat",  "--saturation", type=float, help="encourage saturation, 0 -- skip", default=0, dest='saturation')
-    vq_parser.add_argument("-pdist",  "--point_dist", type=float, help="encourage saturation, 0 -- skip", default=0, dest='point_dist')
 
     return vq_parser
 
@@ -1464,7 +1466,7 @@ def command_line_override():
     return settings
 
 def main():
-    settings = apply_settings()    
+    settings = apply_settings()
     do_init(settings)
     do_run(settings)
 
