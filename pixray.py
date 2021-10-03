@@ -901,7 +901,7 @@ def ascend_txt(args):
 
     if args.point_dist:
         median_dist = drawer.get_median_point_dist()
-        result.append( median_dist * args.point_dist )
+        result.append( torch.tensor(median_dist) * args.point_dist )
 
     for cutoutSize in cutoutsTable:
         # clear the transform "cache"
