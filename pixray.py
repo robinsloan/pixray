@@ -771,7 +771,7 @@ def checkin(args, iter, losses):
 
     if args.output_json:
         try:
-            drawer.to_svg(args.output_json)
+            drawer.to_json(args.output_json)
         except AttributeError:
             print("You specified an output SVG file, but it looks like your drawer doesn't offer that.")
 
