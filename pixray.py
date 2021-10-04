@@ -453,8 +453,13 @@ def do_init(args):
     gside_X = sideX
     gside_Y = sideY
 
+    clip_download_root = "/root/.cache/clip"
+    if os.path.exists("/content/gdrive/MyDrive/pixray"):
+        download_root = "/content/gdrive/MyDrive/pixray"
+
+
     for clip_model in args.clip_models:
-        perceptor = clip.load(clip_model, jit=jit)[0].eval().requires_grad_(False).to(device)
+        perceptor = clip.load(clip_model, jit=jit, download_root=download_root)[0].eval().requires_grad_(False).to(device)
         perceptors[clip_model] = perceptor
 
         cut_size = perceptor.visual.input_resolution
@@ -767,13 +772,13 @@ def checkin(args, iter, losses):
         try:
             drawer.to_svg(args.output_svg)
         except AttributeError:
-            print("You specified an output SVG file, but it looks like your drawer doesn't offer that.")
+            print("You specified an output SVG file, but it looks like your drawer doesn't offer that (or there is an error in the function)")
 
     if args.output_json:
         try:
             drawer.to_json(args.output_json)
         except AttributeError:
-            print("You specified an output SVG file, but it looks like your drawer doesn't offer that.")
+            print("You specified an output JSON file, but it looks like your drawer doesn't offer that (or there is an error in the function)")
 
     if cur_anim_index == len(anim_output_files) - 1:
         # save gif
