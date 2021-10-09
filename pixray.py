@@ -150,7 +150,7 @@ class MakeCutouts(nn.Module):
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
-        self.cutn_zoom = cutn # int(2*cutn/3)
+        self.cutn_zoom = int(cutn * 0.75) # "dividing line" between zooms and wides
         self.cut_pow = cut_pow
         self.clip_view = clip_view
         self.transforms = None
@@ -158,9 +158,9 @@ class MakeCutouts(nn.Module):
         augmentations = []
         if global_aspect_width != 1:
             augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
-        augmentations.append(MyRandomPerspective(distortion_scale=0.40, p=0.7, return_transform=True))
-        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.75),  ratio=(0.85,1.2), cropping_mode='resample', p=0.7, return_transform=True))
-        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
+        augmentations.append(MyRandomPerspective(distortion_scale=0.5, p=0.5, return_transform=True))
+        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1.0), ratio=(0.8,1.2), cropping_mode='resample', p=0.7, return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.3, return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
 
         augmentations = []
@@ -179,8 +179,8 @@ class MakeCutouts(nn.Module):
 
         # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
         augmentations.append(K.CenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
-        augmentations.append(K.RandomPerspective(distortion_scale=0.20, p=0.7, return_transform=True))
-        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
+        # augmentations.append(K.RandomPerspective(distortion_scale=0.20, p=0.7, return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.3, return_transform=True))
         self.augs_wide = nn.Sequential(*augmentations)
 
         self.noise_fac = 0.1
@@ -226,9 +226,9 @@ class MakeCutouts(nn.Module):
             #         TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
         else:
             batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
-            # batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
-            batch = torch.cat([batch1])
-            self.transforms = torch.cat([transforms1])
+            batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
+            batch = torch.cat([batch1, batch2])
+            self.transforms = torch.cat([transforms1, transforms2])
 
             ## diagnostic!
             if self.clip_view and cur_iteration % 20 == 0:
