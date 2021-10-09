@@ -1146,11 +1146,6 @@ def process_args(vq_parser, namespace=None):
     clip_models = args.clip_models.split(",")
     args.clip_models = [model.strip() for model in clip_models]
 
-    # Make video steps directory
-    if args.make_video:
-        if not os.path.exists('steps'):
-            os.mkdir('steps')
-
     if args.learning_rate_drops is None:
         args.learning_rate_drops = []
     else:
