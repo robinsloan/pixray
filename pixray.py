@@ -820,7 +820,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
     vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
-    vq_parser.add_argument("-o",    "--output_path", type=str, help="Output path", default="./", dest='output_path')
+    vq_parser.add_argument("-opath","--output_path", type=str, help="Output path", default="./", dest='output_path')
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
     vq_parser.add_argument("-osvg", "--output_svg", type=str, help="Output file for raw SVG", default=None, dest='output_svg')
     vq_parser.add_argument("-ojson","--output_json", type=str, help="Output file for points as JSON", default=None, dest='output_json')
