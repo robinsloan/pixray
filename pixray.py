@@ -235,9 +235,9 @@ class MakeCutouts(nn.Module):
             ## diagnostic!
             if cur_iteration < 2:
                 for j in range(4):
-                    TF.to_pil_image(batch[j].cpu()).save(f"{args.output_path}live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+                    TF.to_pil_image(batch[j].cpu()).save(f'/content/gdrive/MyDrive/pixray/live_im_{cur_iteration:02d}_{j:02d}_{spot}.png')
                     j_wide = j + self.cutn_zoom
-                    TF.to_pil_image(batch[j_wide].cpu()).save(f"{args.output_path}live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+                    TF.to_pil_image(batch[j_wide].cpu()).save(f'/content/gdrive/MyDrive/pixray/live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png')
 
         # print(batch.shape, self.transforms.shape)
 
