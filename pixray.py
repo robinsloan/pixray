@@ -159,7 +159,7 @@ class MakeCutouts(nn.Module):
         if global_aspect_width != 1:
             augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
         augmentations.append(MyRandomPerspective(distortion_scale=0.5, p=0.5, return_transform=True))
-        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.7), ratio=(0.8,1.2), cropping_mode='resample', p=0.7, return_transform=True))
+        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.2,0.8), ratio=(0.8,1.2), cropping_mode='resample', p=0.7, return_transform=True))
         augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.3, return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
 
@@ -179,8 +179,8 @@ class MakeCutouts(nn.Module):
 
         # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
         augmentations.append(K.CenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
-        # augmentations.append(K.RandomPerspective(distortion_scale=0.20, p=0.7, return_transform=True))
-        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.3, return_transform=True))
+        augmentations.append(K.RandomPerspective(distortion_scale=0.1, p=0.7, return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.5, return_transform=True))
         self.augs_wide = nn.Sequential(*augmentations)
 
         self.noise_fac = 0.1
@@ -240,6 +240,7 @@ class MakeCutouts(nn.Module):
         if self.noise_fac:
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
+
         return batch
 
 # https://colab.research.google.com/drive/1qCpnXkBrT1ANHhMjP0LFCA3qV0RwM7yH#scrollTo=YHOj78Yvx8jP
@@ -526,7 +527,7 @@ def ascend_txt(args):
 
     result = []
 
-    if (cur_iteration%2 == 0):
+    if (cur_iteration % 2 == 0):
         global_padding_mode = "reflection"
     else:
         global_padding_mode = "border"
