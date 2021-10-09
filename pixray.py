@@ -150,7 +150,7 @@ class MakeCutouts(nn.Module):
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
-        self.cutn_zoom = int(2*cutn/3)
+        self.cutn_zoom = cutn # int(2*cutn/3)
         self.cut_pow = cut_pow
         self.clip_view = clip_view
         self.transforms = None
@@ -235,10 +235,8 @@ class MakeCutouts(nn.Module):
 
             ## diagnostic!
             if self.clip_view and cur_iteration % 20 == 0:
-                for j in range(4):
-                    TF.to_pil_image(batch[j].cpu()).save(f'/content/gdrive/MyDrive/pixray/live_im_{cur_iteration:02d}_{j:02d}.png')
-                    j_wide = j + self.cutn_zoom
-                    TF.to_pil_image(batch[j_wide].cpu()).save(f'/content/gdrive/MyDrive/pixray/live_im_{cur_iteration:02d}_{j_wide:02d}.png')
+                for j in range(cutn):
+                    TF.to_pil_image(batch[j].cpu()).save(f'/content/gdrive/MyDrive/pixray/clipview_{cur_iteration:02d}_cut_{j:02d}.png')
 
         # print(batch.shape, self.transforms.shape)
 
