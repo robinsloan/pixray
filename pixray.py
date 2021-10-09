@@ -159,7 +159,7 @@ class MakeCutouts(nn.Module):
         if global_aspect_width != 1:
             augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
         augmentations.append(MyRandomPerspective(distortion_scale=0.5, p=0.5, return_transform=True))
-        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1.0), ratio=(0.8,1.2), cropping_mode='resample', p=0.7, return_transform=True))
+        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.7), ratio=(0.8,1.2), cropping_mode='resample', p=0.7, return_transform=True))
         augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.3, return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
 
