@@ -61,7 +61,6 @@ class_table.update({
     "clipdraw": ClipDrawer
 })
 
-
 import matplotlib.colors
 # only needed for palette stuff
 
@@ -158,7 +157,7 @@ class MakeCutouts(nn.Module):
         augmentations = []
         if global_aspect_width != 1:
             augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
-        augmentations.append(MyRandomPerspective(distortion_scale=0.40, p=0.7, return_transform=True))
+        # augmentations.append(MyRandomPerspective(distortion_scale=0.40, p=0.7, return_transform=True))
         augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.75),  ratio=(0.85,1.2), cropping_mode='resample', p=0.7, return_transform=True))
         augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
@@ -232,11 +231,13 @@ class MakeCutouts(nn.Module):
             # print(batch.shape)
             self.transforms = torch.cat([transforms1, transforms2])
             ## batch, self.transforms = self.augs(torch.cat(cutouts, dim=0))
-            # if cur_iteration < 2:
-            #     for j in range(4):
-            #         TF.to_pil_image(batch[j].cpu()).save(f"live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
-            #         j_wide = j + self.cutn_zoom
-            #         TF.to_pil_image(batch[j_wide].cpu()).save(f"live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
+
+            ## diagnostic!
+            if cur_iteration < 2:
+                for j in range(4):
+                    TF.to_pil_image(batch[j].cpu()).save(f"{args.output_path}live_im_{cur_iteration:02d}_{j:02d}_{spot}.png")
+                    j_wide = j + self.cutn_zoom
+                    TF.to_pil_image(batch[j_wide].cpu()).save(f"{args.output_path}live_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
 
         # print(batch.shape, self.transforms.shape)
 
@@ -499,17 +500,17 @@ def checkin(args, iter, losses):
     timg = drawer.synth(cur_iteration)
     img = TF.to_pil_image(timg[0].cpu())
     # img = drawer.to_image()
-    img.save(args.output, pnginfo=info)
+    img.save(args.output_path + args.output, pnginfo=info)
 
     if args.output_svg:
         try:
-            drawer.to_svg(args.output_svg)
+            drawer.to_svg(args.output_path + args.output_svg)
         except AttributeError:
             print("You specified an output SVG file, but it looks like your drawer doesn't offer that (or there is an error in the function)")
 
     if args.output_json:
         try:
-            drawer.to_json(args.output_json)
+            drawer.to_json(args.output_path + args.output_json)
         except AttributeError:
             print("You specified an output JSON file, but it looks like your drawer doesn't offer that (or there is an error in the function)")
 
@@ -819,6 +820,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
     vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
+    vq_parser.add_argument("-o",    "--output_path", type=str, help="Output path", default="./", dest='output_path')
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
     vq_parser.add_argument("-osvg", "--output_svg", type=str, help="Output file for raw SVG", default=None, dest='output_svg')
     vq_parser.add_argument("-ojson","--output_json", type=str, help="Output file for points as JSON", default=None, dest='output_json')
