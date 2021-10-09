@@ -582,8 +582,6 @@ def do_init(args):
         print('Using spot off prompts:', args.spot_prompts_off)
     if args.image_prompts:
         print('Using #image prompts:', len(args.image_prompts))
-    if args.init_image:
-        print('Using initial image:', args.init_image)
 
 # dreaded globals (for now)
 z_orig = None
