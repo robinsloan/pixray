@@ -226,12 +226,9 @@ class MakeCutouts(nn.Module):
             #         TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
         else:
             batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
-            batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
-            # print(batch1.shape, batch2.shape)
-            batch = torch.cat([batch1, batch2])
-            # print(batch.shape)
-            self.transforms = torch.cat([transforms1, transforms2])
-            ## batch, self.transforms = self.augs(torch.cat(cutouts, dim=0))
+            # batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
+            batch = torch.cat([batch1])
+            self.transforms = torch.cat([transforms1])
 
             ## diagnostic!
             if self.clip_view and cur_iteration % 20 == 0:
