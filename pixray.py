@@ -144,7 +144,7 @@ class MyRandomPerspective(K.RandomPerspective):
         )
 
 class MakeCutouts(nn.Module):
-    def __init__(self, cut_size, cutn, cut_pow=1.):
+    def __init__(self, cut_size, cutn, cut_pow=1., clip_view=False):
         global global_aspect_width
 
         super().__init__()
@@ -152,6 +152,7 @@ class MakeCutouts(nn.Module):
         self.cutn = cutn
         self.cutn_zoom = int(2*cutn/3)
         self.cut_pow = cut_pow
+        self.clip_view = clip_view
         self.transforms = None
 
         augmentations = []
@@ -233,7 +234,7 @@ class MakeCutouts(nn.Module):
             ## batch, self.transforms = self.augs(torch.cat(cutouts, dim=0))
 
             ## diagnostic!
-            if cur_iteration < 2:
+            if self.clip_view and cur_iteration % 20 == 0:
                 for j in range(4):
                     TF.to_pil_image(batch[j].cpu()).save(f'/content/gdrive/MyDrive/pixray/live_im_{cur_iteration:02d}_{j:02d}.png')
                     j_wide = j + self.cutn_zoom
@@ -361,7 +362,7 @@ def do_init(args):
         cut_size = perceptor.visual.input_resolution
         cutoutSizeTable[clip_model] = cut_size
         if not cut_size in cutoutsTable:
-            make_cutouts = MakeCutouts(cut_size, args.num_cuts, cut_pow=args.cut_pow)
+            make_cutouts = MakeCutouts(cut_size, args.num_cuts, cut_pow=args.cut_pow, clip_view=args.clip_view)
             cutoutsTable[cut_size] = make_cutouts
 
     z_orig = drawer.get_z_copy()
@@ -831,6 +832,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-smo",  "--smoothness", type=float, help="encourage smoothness, 0 -- skip", default=0, dest='smoothness')
     vq_parser.add_argument("-est",  "--smoothness_type", type=str, help="enforce smoothness type: default/clipped/log", default='default', dest='smoothness_type')
     vq_parser.add_argument("-sat",  "--saturation", type=float, help="encourage saturation, 0 -- skip", default=0, dest='saturation')
+    vq_parser.add_argument("-cview","--clip_view", type=float, help="spit out files showing what CLIP is seeing", default=False, dest='clip_view')
 
     return vq_parser
 
