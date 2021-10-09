@@ -263,6 +263,7 @@ def fetch_spot_indexes(sideX, sideY):
 # f = generate.fetch_spot_indexes(5, 5)
 # f[0].shape = [60,3]
 
+"""
 class MakeCutouts(nn.Module):
     def __init__(self, cut_size, cutn, cut_pow=1.):
         global global_aspect_width
@@ -278,7 +279,7 @@ class MakeCutouts(nn.Module):
         if global_aspect_width != 1:
             augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
         # augmentations.append(MyRandomPerspective(distortion_scale=0.40, p=0.7, return_transform=True))
-        # augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.75),  ratio=(0.85,1.2), cropping_mode='resample', p=0.7, return_transform=True))
+        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.75), ratio=(1.0,1.0), cropping_mode='resample', p=1.0, return_transform=True))
         # augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
 
@@ -375,7 +376,28 @@ class MakeCutouts(nn.Module):
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
         return batch
+"""
 
+# https://colab.research.google.com/drive/1qCpnXkBrT1ANHhMjP0LFCA3qV0RwM7yH#scrollTo=YHOj78Yvx8jP
+class MakeCutouts(nn.Module):
+    def __init__(self, cut_size, cutn, cut_pow=1.):
+        super().__init__()
+        self.cut_size = cut_size
+        self.cutn = cutn
+        self.cut_pow = cut_pow
+
+    def forward(self, input):
+        sideY, sideX = input.shape[2:4]
+        max_size = min(sideX, sideY)
+        min_size = min(sideX, sideY, self.cut_size)
+        cutouts = []
+        for _ in range(self.cutn):
+            size = int(torch.rand([])**self.cut_pow * (max_size - min_size) + min_size)
+            offsetx = torch.randint(0, sideX - size + 1, ())
+            offsety = torch.randint(0, sideY - size + 1, ())
+            cutout = input[:, :, offsety:offsety + size, offsetx:offsetx + size]
+            cutouts.append(F.adaptive_avg_pool2d(cutout, self.cut_size))
+        return torch.cat(cutouts)
 
 def resize_image(image, out_size):
     ratio = image.size[0] / image.size[1]
