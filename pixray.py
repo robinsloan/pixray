@@ -1116,9 +1116,6 @@ def process_args(vq_parser, namespace=None):
             print("aspect not understood, aborting -> ", args.aspect)
             exit(1)
 
-    if args.init_noise.lower() == "none":
-        args.init_noise = None
-
     # Split text prompts using the pipe character
     if args.prompts:
         args.prompts = [phrase.strip() for phrase in args.prompts.split("|")]
