@@ -18,8 +18,10 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import transforms
 from torchvision.transforms import functional as TF
-torch.backends.cudnn.benchmark = False    # NR: True is a bit faster, but can lead to OOM. False is more deterministic.
-#torch.use_deterministic_algorithms(True)   # NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
+torch.backends.cudnn.benchmark = False
+# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
+#torch.use_deterministic_algorithms(True)
+# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
 
 from torch_optimizer import DiffGrad, AdamP, RAdam
 from perlin_numpy import generate_fractal_noise_2d
@@ -50,26 +52,19 @@ class_table = {
     "vqgan": VqganDrawer
 }
 
-try:
-    from clipdrawer import ClipDrawer
-    from pixeldrawer import PixelDrawer
-    from linedrawer import LineDrawer
-    # update class_table if these import OK
-    class_table.update({
-        "line_sketch": LineDrawer,
-        "pixel": PixelDrawer,
-        "clipdraw": ClipDrawer
-    })
-except ImportError:
-    # diffvg is not strictly required
-    pass
+from clipdrawer import ClipDrawer
+from pixeldrawer import PixelDrawer
+from linedrawer import LineDrawer
+# update class_table if these import OK
+class_table.update({
+    "line_sketch": LineDrawer,
+    "pixel": PixelDrawer,
+    "clipdraw": ClipDrawer
+})
 
-try:
-    import matplotlib.colors
-except ImportError:
-    # only needed for palette stuff
-    pass
 
+import matplotlib.colors
+# only needed for palette stuff
 
 # this is enabled when not in the master branch
 # print("warning: running unreleased future version")
@@ -102,12 +97,10 @@ else:
 def sinc(x):
     return torch.where(x != 0, torch.sin(math.pi * x) / (math.pi * x), x.new_ones([]))
 
-
 def lanczos(x, a):
     cond = torch.logical_and(-a < x, x < a)
     out = torch.where(cond, sinc(x) * sinc(x/a), x.new_zeros([]))
     return out / out.sum()
-
 
 def ramp(ratio, width):
     n = math.ceil(width / ratio + 1)
@@ -117,7 +110,6 @@ def ramp(ratio, width):
         out[i] = cur
         cur += ratio
     return torch.cat([-out[1:].flip([0]), out])[1:-1]
-
 
 # NR: Testing with different intital images
 def old_random_noise_image(w,h):
@@ -463,8 +455,9 @@ def do_init(args):
 
     drawer = class_table[args.drawer](args)
     drawer.load_model(args, device)
+
+
     num_resolutions = drawer.get_num_resolutions()
-    # print("-----------> NUMR ", num_resolutions)
 
     jit = True if float(torch.__version__[:3]) < 1.8 else False
     f = 2**(num_resolutions - 1)
@@ -472,14 +465,15 @@ def do_init(args):
     toksX, toksY = args.size[0] // f, args.size[1] // f
     sideX, sideY = toksX * f, toksY * f
 
+    drawer.rand_init(toksX, toksY)
+
     # save sideX, sideY in globals (need if using overlay)
     gside_X = sideX
     gside_Y = sideY
 
-    clip_download_root = "/root/.cache/clip"
+    download_root = "/root/.cache/clip"
     if os.path.exists("/content/gdrive/MyDrive/pixray"):
         download_root = "/content/gdrive/MyDrive/pixray"
-
 
     for clip_model in args.clip_models:
         perceptor = clip.load(clip_model, jit=jit, download_root=download_root)[0].eval().requires_grad_(False).to(device)
@@ -490,98 +484,6 @@ def do_init(args):
         if not cut_size in cutoutsTable:
             make_cutouts = MakeCutouts(cut_size, args.num_cuts, cut_pow=args.cut_pow)
             cutoutsTable[cut_size] = make_cutouts
-
-    init_image_tensor = None
-    target_image_tensor = None
-
-    # Image initialisation
-    if args.init_image or args.init_noise:
-        # setup init image wih pil
-        # first - always start with noise or blank
-        if args.init_noise == 'pixels':
-            img = random_noise_image(args.size[0], args.size[1])
-        elif args.init_noise == 'gradient':
-            img = random_gradient_image(args.size[0], args.size[1])
-        elif args.init_noise == 'snow':
-            img = old_random_noise_image(args.size[0], args.size[1])
-        else:
-            img = Image.new(mode="RGB", size=(args.size[0], args.size[1]), color=(255, 255, 255))
-        starting_image = img.convert('RGB')
-        starting_image = starting_image.resize((sideX, sideY), Image.LANCZOS)
-
-        if args.init_image:
-            # now we might overlay an init image (init_image also can be recycled as overlay)
-            if 'http' in args.init_image:
-              init_image = Image.open(urlopen(args.init_image))
-            else:
-              init_image = Image.open(args.init_image)
-            # this version is needed potentially for the loss function
-            init_image_rgb = init_image.convert('RGB')
-            init_image_rgb = init_image_rgb.resize((sideX, sideY), Image.LANCZOS)
-            init_image_tensor = TF.to_tensor(init_image_rgb)
-            init_image_tensor = init_image_tensor.to(device).unsqueeze(0)
-
-            # this version gets overlaid on the background (noise)
-            init_image_rgba = init_image.convert('RGBA')
-            init_image_rgba = init_image_rgba.resize((sideX, sideY), Image.LANCZOS)
-            top_image = init_image_rgba.copy()
-            if args.init_image_alpha and args.init_image_alpha >= 0:
-                top_image.putalpha(args.init_image_alpha)
-            starting_image.paste(top_image, (0, 0), top_image)
-
-        starting_image.save("starting_image.png")
-        starting_tensor = TF.to_tensor(starting_image)
-        init_tensor = starting_tensor.to(device).unsqueeze(0) * 2 - 1
-        drawer.init_from_tensor(init_tensor)
-
-    else:
-        # untested
-        drawer.rand_init(toksX, toksY)
-
-    if args.overlay_every:
-        if args.overlay_image:
-            if 'http' in args.overlay_image:
-              overlay_image = Image.open(urlopen(args.overlay_image))
-            else:
-              overlay_image = Image.open(args.overlay_image)
-            overlay_image_rgba = overlay_image.convert('RGBA')
-            overlay_image_rgba = overlay_image_rgba.resize((sideX, sideY), Image.LANCZOS)
-        else:
-            overlay_image_rgba = init_image_rgba
-        if args.overlay_alpha:
-            overlay_image_rgba.putalpha(args.overlay_alpha)
-        overlay_image_rgba.save('overlay_image.png')
-
-    if args.target_images is not None:
-        z_targets = []
-        filelist = real_glob(args.target_images)
-        for target_image in filelist:
-            target_image = Image.open(target_image)
-            target_image_rgb = target_image.convert('RGB')
-            target_image_rgb = target_image_rgb.resize((sideX, sideY), Image.LANCZOS)
-            target_image_tensor_local = TF.to_tensor(target_image_rgb)
-            target_image_tensor = target_image_tensor_local.to(device).unsqueeze(0) * 2 - 1
-            z_target = drawer.get_z_from_tensor(target_image_tensor)
-            z_targets.append(z_target)
-
-    if args.image_labels is not None:
-        z_labels = []
-        filelist = real_glob(args.image_labels)
-        cur_labels = []
-        for image_label in filelist:
-            image_label = Image.open(image_label)
-            image_label_rgb = image_label.convert('RGB')
-            image_label_rgb = image_label_rgb.resize((sideX, sideY), Image.LANCZOS)
-            image_label_rgb_tensor = TF.to_tensor(image_label_rgb)
-            image_label_rgb_tensor = image_label_rgb_tensor.to(device).unsqueeze(0) * 2 - 1
-            z_label = drawer.get_z_from_tensor(image_label_rgb_tensor)
-            cur_labels.append(z_label)
-        image_embeddings = torch.stack(cur_labels)
-        print("Processing labels: ", image_embeddings.shape)
-        image_embeddings /= image_embeddings.norm(dim=-1, keepdim=True)
-        image_embeddings = image_embeddings.mean(dim=0)
-        image_embeddings /= image_embeddings.norm()
-        z_labels.append(image_embeddings.unsqueeze(0))
 
     z_orig = drawer.get_z_copy()
 
@@ -666,11 +568,6 @@ def do_init(args):
             img = resize_image(pil_image, (sideX, sideY))
             pImages.append(TF.to_tensor(img).unsqueeze(0).to(device))
 
-    for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):
-        gen = torch.Generator().manual_seed(seed)
-        embed = torch.empty([1, perceptor.visual.output_dim]).normal_(generator=gen)
-        pMs.append(Prompt(embed, weight).to(device))
-
     opts = rebuild_optimisers(args)
 
     # Output for the user
@@ -687,9 +584,6 @@ def do_init(args):
         print('Using #image prompts:', len(args.image_prompts))
     if args.init_image:
         print('Using initial image:', args.init_image)
-    if args.noise_prompt_weights:
-        print('Noise prompt weights:', args.noise_prompt_weights)
-
 
 # dreaded globals (for now)
 z_orig = None
@@ -722,25 +616,6 @@ best_z = None
 num_loss_drop = 0
 max_loss_drops = 2
 iter_drop_delay = 20
-
-def make_gif(args, iter):
-    gif_output = os.path.join(args.animation_dir, "anim.gif")
-    if os.path.exists(gif_output):
-        os.remove(gif_output)
-    cmd = ['ffmpeg', '-framerate', '10', '-pattern_type', 'glob',
-           '-i', f"{args.animation_dir}/*.png", '-loop', '0', gif_output]
-    try:
-        output = subprocess.check_output(cmd)
-    except subprocess.CalledProcessError as cpe:
-        output = cpe.output
-        print("Ignoring non-zero exit: ", output)
-
-    return gif_output
-
-# !ffmpeg \
-#   -framerate 10 -pattern_type glob \
-#   -i '{animation_output}/*_*.png' \
-#   -loop 0 {animation_output}/final.gif
 
 @torch.no_grad()
 def checkdrop(args, iter, losses):
@@ -776,20 +651,13 @@ def checkin(args, iter, losses):
     else:
         writestr = f'iter: {iter}, finished'
 
-    if args.animation_dir is not None:
-        writestr = f'anim: {cur_anim_index}/{len(anim_output_files)} {writestr}'
-    else:
-        writestr = f'{writestr} (-{num_cycles_not_best}=>{best_loss:2.4g})'
+    writestr = f'{writestr} (-{num_cycles_not_best}=>{best_loss:2.4g})'
     info = PngImagePlugin.PngInfo()
     info.add_text('comment', f'{args.prompts}')
     timg = drawer.synth(cur_iteration)
     img = TF.to_pil_image(timg[0].cpu())
     # img = drawer.to_image()
-    if cur_anim_index is None:
-        outfile = args.output
-    else:
-        outfile = anim_output_files[cur_anim_index]
-    img.save(outfile, pnginfo=info)
+    img.save(args.output, pnginfo=info)
 
     if args.output_svg:
         try:
@@ -803,12 +671,6 @@ def checkin(args, iter, losses):
         except AttributeError:
             print("You specified an output JSON file, but it looks like your drawer doesn't offer that (or there is an error in the function)")
 
-    if cur_anim_index == len(anim_output_files) - 1:
-        # save gif
-        gif_output = make_gif(args, iter)
-        if IS_NOTEBOOK and iter % args.display_every == 0:
-            clear_output()
-            display.display(display.Image(open(gif_output,'rb').read()))
     if IS_NOTEBOOK and iter % args.display_every == 0:
         if cur_anim_index is None or iter == 0:
             if args.display_clear:
@@ -992,11 +854,6 @@ def ascend_txt(args):
         cur_loss = F.cosine_embedding_loss(f, f2, y) * args.init_weight_cos
         result.append(cur_loss)
 
-    if args.make_video:
-        img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
-        img = np.transpose(img, (1, 2, 0))
-        imageio.imwrite(f'./steps/frame_{cur_iteration:04d}.png', np.array(img))
-
     return result
 
 def re_average_z(args):
@@ -1053,10 +910,6 @@ def train(args, cur_it):
         for opt in opts:
             opt.step()
 
-        if args.overlay_every and cur_it != 0 and \
-            (cur_it % (args.overlay_every + args.overlay_offset)) == 0:
-            re_average_z(args)
-
         drawer.clip_z()
 
     if cur_it == args.iterations:
@@ -1093,122 +946,22 @@ def do_run(args):
 
     cur_iteration = 0
 
-    if args.animation_dir is not None:
-        # we already have z_targets. setup some sort of global ring
-        # we need something like
-        # copies of all the current z's (they can all start off all as copies)
-        # a list of all the output filenames
-        #
-        if not os.path.exists(args.animation_dir):
-            os.mkdir(args.animation_dir)
-        if args.target_images is not None:
-            filelist = real_glob(args.target_images)
-        else:
-            filelist = args.image_prompts
-        num_anim_frames = len(filelist)
-        for target_image in filelist:
-            basename = os.path.basename(target_image)
-            target_output = os.path.join(args.animation_dir, basename)
-            anim_output_files.append(target_output)
-        for i in range(num_anim_frames):
-            cur_z = drawer.get_z_copy()
-            anim_cur_zs.append(cur_z)
-            anim_next_zs.append(None)
-
-        step_iteration = 0
-
+    try:
+        keep_going = True
         with tqdm() as pbar:
-            while True:
-                cur_images = []
-                for i in range(num_anim_frames):
-                    # do merge frames here from cur->next when we are ready to be fancy
-                    cur_anim_index = i
-                    # anim_cur_zs[cur_anim_index] = anim_next_zs[cur_anim_index]
-                    cur_iteration = step_iteration
-                    drawer.set_z(anim_cur_zs[cur_anim_index])
-                    for j in range(args.save_every):
-                        keep_going = train(args, cur_iteration)
-                        cur_iteration += 1
-                        pbar.update()
-                    # anim_next_zs[cur_anim_index] = drawer.get_z_copy()
-                    cur_images.append(drawer.to_image())
-                step_iteration = step_iteration + args.save_every
-                if step_iteration >= args.iterations:
-                    break
-                # compute the next round of cur_zs here from all the next_zs
-                for i in range(num_anim_frames):
-                    prev_i = (i + num_anim_frames - 1) % num_anim_frames
-                    base_image = cur_images[i].copy()
-                    prev_image = cur_images[prev_i].copy().convert('RGBA')
-                    prev_image.putalpha(args.animation_alpha)
-                    base_image.paste(prev_image, (0, 0), prev_image)
-                    # base_image.save(f"overlaid_{i:02d}.png")
-                    drawer.reapply_from_tensor(TF.to_tensor(base_image).to(device).unsqueeze(0) * 2 - 1)
-                    anim_cur_zs[i] = drawer.get_z_copy()
-    else:
-        try:
-            keep_going = True
-            with tqdm() as pbar:
-                while keep_going:
-                    try:
-                        keep_going = train(args, cur_iteration)
-                        if cur_iteration == args.iterations:
-                            break
-                        cur_iteration += 1
-                        pbar.update()
-                    except RuntimeError as e:
-                        print("Oops: runtime error: ", e)
-                        print("Try reducing --num-cuts to save memory")
-                        raise e
-        except KeyboardInterrupt:
-            pass
-
-    if args.make_video:
-        do_video(args)
-
-def do_video(args):
-    global cur_iteration
-
-    # Video generation
-    init_frame = 1 # This is the frame where the video will start
-    last_frame = cur_iteration # You can change to the number of the last frame you want to generate. It will raise an error if that number of frames does not exist.
-
-    min_fps = 10
-    max_fps = 60
-
-    total_frames = last_frame-init_frame
-
-    length = 15 # Desired time of the video in seconds
-
-    frames = []
-    tqdm.write('Generating video...')
-    for i in range(init_frame,last_frame): #
-        frames.append(Image.open(f'./steps/frame_{i:04d}.png'))
-
-    #fps = last_frame/10
-    fps = np.clip(total_frames/length,min_fps,max_fps)
-
-    from subprocess import Popen, PIPE
-    import re
-    output_file = re.compile('\.png$').sub('.mp4', args.output)
-    p = Popen(['ffmpeg',
-               '-y',
-               '-f', 'image2pipe',
-               '-vcodec', 'png',
-               '-r', str(fps),
-               '-i',
-               '-',
-               '-vcodec', 'libx264',
-               '-r', str(fps),
-               '-pix_fmt', 'yuv420p',
-               '-crf', '17',
-               '-preset', 'veryslow',
-               '-metadata', f'comment={args.prompts}',
-               output_file], stdin=PIPE)
-    for im in tqdm(frames):
-        im.save(p.stdin, 'PNG')
-    p.stdin.close()
-    p.wait()
+            while keep_going:
+                try:
+                    keep_going = train(args, cur_iteration)
+                    if cur_iteration == args.iterations:
+                        break
+                    cur_iteration += 1
+                    pbar.update()
+                except RuntimeError as e:
+                    print("Oops: runtime error: ", e)
+                    print("Try reducing --num-cuts to save memory")
+                    raise e
+    except KeyboardInterrupt:
+        pass
 
 # this dictionary is used for settings in the notebook
 global_pixray_settings = {}
@@ -1233,30 +986,19 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=10, dest='save_every')
     vq_parser.add_argument("-de",   "--display_every", type=int, help="Display image iterations", default=20, dest='display_every')
     vq_parser.add_argument("-dc",   "--display_clear", type=bool, help="Clear dispaly when updating", default=False, dest='display_clear')
-    vq_parser.add_argument("-ove",  "--overlay_every", type=int, help="Overlay image iterations", default=None, dest='overlay_every')
-    vq_parser.add_argument("-ovo",  "--overlay_offset", type=int, help="Overlay image iteration offset", default=0, dest='overlay_offset')
-    vq_parser.add_argument("-ovi",  "--overlay_image", type=str, help="Overlay image (if not init)", default=None, dest='overlay_image')
     vq_parser.add_argument("-qua",  "--quality", type=str, help="draft, normal, best", default="normal", dest='quality')
     vq_parser.add_argument("-asp",  "--aspect", type=str, help="widescreen, square", default="widescreen", dest='aspect')
     vq_parser.add_argument("-ezs",  "--ezsize", type=str, help="small, medium, large", default=None, dest='ezsize')
     vq_parser.add_argument("-sca",  "--scale", type=float, help="scale (instead of ezsize)", default=None, dest='scale')
-    vq_parser.add_argument("-ova",  "--overlay_alpha", type=int, help="Overlay alpha (0-255)", default=None, dest='overlay_alpha')
     vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=None, dest='size')
-    vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
-    vq_parser.add_argument("-iia",  "--init_image_alpha", type=int, help="Init image alpha (0-255)", default=200, dest='init_image_alpha')
-    vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default="pixels", dest='init_noise')
     vq_parser.add_argument("-ti",   "--target_images", type=str, help="Target images", default=None, dest='target_images')
     vq_parser.add_argument("-tiw",  "--target_image_weight", type=float, help="Target images weight", default=1.0, dest='target_image_weight')
     vq_parser.add_argument("-twp",  "--target_weight_pix", type=float, help="Target weight pix loss", default=0., dest='target_weight_pix')
-    vq_parser.add_argument("-anim", "--animation_dir", type=str, help="Animation output dir", default=None, dest='animation_dir')
-    vq_parser.add_argument("-ana",  "--animation_alpha", type=int, help="Forward blend for consistency", default=128, dest='animation_alpha')
     vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight (main=spherical)", default=None, dest='init_weight')
     vq_parser.add_argument("-iwd",  "--init_weight_dist", type=float, help="Initial weight dist loss", default=0., dest='init_weight_dist')
     vq_parser.add_argument("-iwc",  "--init_weight_cos", type=float, help="Initial weight cos loss", default=0., dest='init_weight_cos')
     vq_parser.add_argument("-iwp",  "--init_weight_pix", type=float, help="Initial weight pix loss", default=0., dest='init_weight_pix')
     vq_parser.add_argument("-m",    "--clip_models", type=str, help="CLIP model", default=None, dest='clip_models')
-    vq_parser.add_argument("-nps",  "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
-    vq_parser.add_argument("-npw",  "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
     vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning rate", default=0.2, dest='learning_rate')
     vq_parser.add_argument("-lrd",  "--learning_rate_drops", nargs="*", type=float, help="When to drop learning rate (relative to iterations)", default=[75], dest='learning_rate_drops')
     vq_parser.add_argument("-as",   "--auto_stop", type=bool, help="Auto stopping", default=False, dest='auto_stop')
@@ -1266,11 +1008,9 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
     vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
-    vq_parser.add_argument("-osvg",    "--output_svg", type=str, help="Output file for raw SVG", default=None, dest='output_svg')
-    vq_parser.add_argument("-ojson",    "--output_json", type=str, help="Output file for points as JSON", default=None, dest='output_json')
-    vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
+    vq_parser.add_argument("-osvg", "--output_svg", type=str, help="Output file for raw SVG", default=None, dest='output_svg')
+    vq_parser.add_argument("-ojson","--output_json", type=str, help="Output file for points as JSON", default=None, dest='output_json')
     vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
-    vq_parser.add_argument("-mo",   "--do_mono", type=bool, help="Monochromatic", default=False, dest='do_mono')
     vq_parser.add_argument("-epw",  "--enforce_palette_annealing", type=int, help="enforce palette annealing, 0 -- skip", default=5000, dest='enforce_palette_annealing')
     vq_parser.add_argument("-tp",   "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
     vq_parser.add_argument("-tpl",  "--target_palette_length", type=int, help="target palette length", default=16, dest='target_palette_length')
@@ -1296,7 +1036,7 @@ def process_args(vq_parser, namespace=None):
       args = vq_parser.parse_args(args=[], namespace=namespace)
     else:
       # sometimes there are both settings and cmd line
-      args = vq_parser.parse_args(namespace=namespace)        
+      args = vq_parser.parse_args(namespace=namespace)
 
     if args.cudnn_determinism:
        torch.backends.cudnn.deterministic = True
