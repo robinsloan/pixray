@@ -518,7 +518,7 @@ def checkin(args, iter, losses):
     if IS_NOTEBOOK and iter % args.display_every == 0:
         if args.display_clear:
             clear_output()
-        display.display(display.Image(args.output))
+        display.display(display.Image(args.output_path + args.output))
 
     tqdm.write(writestr)
 
