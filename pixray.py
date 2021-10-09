@@ -1143,9 +1143,6 @@ def process_args(vq_parser, namespace=None):
     if args.target_palette is not None:
         args.target_palette = palette_from_string(args.target_palette)
 
-    if args.overlay_every is not None and args.overlay_every <= 0:
-        args.overlay_every = None
-
     clip_models = args.clip_models.split(",")
     args.clip_models = [model.strip() for model in clip_models]
 
