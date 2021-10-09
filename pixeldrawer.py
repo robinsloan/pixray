@@ -99,7 +99,7 @@ class PixelDrawer(DrawingInterface):
                 self.num_rows = int(1.414 * self.num_rows)
             elif self.pixel_type == "diamond":
                 self.num_rows = int(2 * self.num_rows)
- 
+
         # we can also "scale" pixels -- scaling "up" meaning fewer rows/cols, etc.
         if settings.pixel_scale is not None and settings.pixel_scale > 0:
             self.num_cols = int(self.num_cols / settings.pixel_scale)
