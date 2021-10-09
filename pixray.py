@@ -670,10 +670,10 @@ def checkin(args, iter, losses):
             print("You specified an output JSON file, but it looks like your drawer doesn't offer that (or there is an error in the function)")
 
     if IS_NOTEBOOK and iter % args.display_every == 0:
-        if cur_anim_index is None or iter == 0:
-            if args.display_clear:
-                clear_output()
-            display.display(display.Image(outfile))
+        if args.display_clear:
+            clear_output()
+        display.display(display.Image(args.output))
+
     tqdm.write(writestr)
 
 def ascend_txt(args):
