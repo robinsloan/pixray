@@ -232,7 +232,7 @@ class MakeCutouts(nn.Module):
 
             ## diagnostic!
             if self.clip_view and cur_iteration % 20 == 0:
-                for j in range(cutn):
+                for j in range(self.cutn):
                     TF.to_pil_image(batch[j].cpu()).save(f'/content/gdrive/MyDrive/pixray/clipview_{cur_iteration:02d}_cut_{j:02d}.png')
 
         # print(batch.shape, self.transforms.shape)
