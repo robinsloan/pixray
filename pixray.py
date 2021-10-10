@@ -144,14 +144,103 @@ class MyRandomPerspective(K.RandomPerspective):
         )
 
 class MakeCutouts(nn.Module):
-    def __init__(self, cut_size, cutn, cut_pow=1., clip_view=False):
+    def __init__(self, cut_size, cutn, cut_pow=1.):
+        global global_aspect_width
+
+        super().__init__()
+        self.cut_size = cut_size
+        self.cutn = cutn
+        self.cutn_zoom = int(2*cutn/3)
+        self.cut_pow = cut_pow
+        self.transforms = None
+
+        augmentations = []
+        if global_aspect_width != 1:
+            augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
+        augmentations.append(MyRandomPerspective(distortion_scale=0.40, p=0.7, return_transform=True))
+        augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.75),  ratio=(0.85,1.2), cropping_mode='resample', p=0.7, return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
+        self.augs_zoom = nn.Sequential(*augmentations)
+
+        augmentations = []
+        if global_aspect_width == 1:
+            n_s = 0.95
+            n_t = (1-n_s)/2
+            augmentations.append(K.RandomAffine(degrees=0, translate=(n_t, n_t), scale=(n_s, n_s), p=1.0, return_transform=True))
+        elif global_aspect_width > 1:
+            n_s = 1/global_aspect_width
+            n_t = (1-n_s)/2
+            augmentations.append(K.RandomAffine(degrees=0, translate=(0, n_t), scale=(0.9*n_s, n_s), p=1.0, return_transform=True))
+        else:
+            n_s = global_aspect_width
+            n_t = (1-n_s)/2
+            augmentations.append(K.RandomAffine(degrees=0, translate=(n_t, 0), scale=(0.9*n_s, n_s), p=1.0, return_transform=True))
+
+        # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
+        augmentations.append(K.CenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
+        augmentations.append(K.RandomPerspective(distortion_scale=0.20, p=0.7, return_transform=True))
+        augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.8, return_transform=True))
+        self.augs_wide = nn.Sequential(*augmentations)
+
+        self.noise_fac = 0.1
+
+        # Pooling
+        self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
+        self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
+
+    def forward(self, input, spot=None):
+        global global_aspect_width, cur_iteration
+        sideY, sideX = input.shape[2:4]
+        max_size = min(sideX, sideY)
+        min_size = min(sideX, sideY, self.cut_size)
+        cutouts = []
+        mask_indexes = None
+
+        for _ in range(self.cutn):
+            # Pooling
+            cutout = (self.av_pool(input) + self.max_pool(input))/2
+
+            if mask_indexes is not None:
+                cutout[0][mask_indexes] = 0.0 # 0.5
+
+            if global_aspect_width != 1:
+                if global_aspect_width > 1:
+                    cutout = kornia.geometry.transform.rescale(cutout, (1, global_aspect_width))
+                else:
+                    cutout = kornia.geometry.transform.rescale(cutout, (1/global_aspect_width, 1))
+
+            cutouts.append(cutout)
+
+        if self.transforms is not None:
+            # print("Cached transforms available")
+            batch1 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[:self.cutn_zoom], dim=0), self.transforms[:self.cutn_zoom],
+                (self.cut_size, self.cut_size), padding_mode=global_padding_mode)
+            batch2 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[self.cutn_zoom:], dim=0), self.transforms[self.cutn_zoom:],
+                (self.cut_size, self.cut_size), padding_mode='zeros')
+            batch = torch.cat([batch1, batch2])
+        else:
+            batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
+            batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
+            batch = torch.cat([batch1, batch2])
+            self.transforms = torch.cat([transforms1, transforms2])
+
+            if self.clip_view and cur_iteration % 50 == 0:
+                for j in range(self.cutn):
+                    TF.to_pil_image(batch[j].cpu()).save(f'{self.clipview}clipview_cut_{j:02d}.png')
+
+        if self.noise_fac:
+            facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
+            batch = batch + facs * torch.randn_like(batch)
+        return batch
+
+class RSMakeCutouts(nn.Module):
+    def __init__(self, cut_size, cutn, clip_view=None):
         global global_aspect_width
 
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
         self.cutn_zoom = int(cutn * 0.666) # "dividing line" between zooms and wides
-        self.cut_pow = cut_pow
         self.clip_view = clip_view
         self.transforms = None
 
@@ -177,7 +266,6 @@ class MakeCutouts(nn.Module):
             n_t = (1-n_s)/2
             augmentations.append(K.RandomAffine(degrees=0, translate=(n_t, 0), scale=(0.9*n_s, n_s), p=1.0, return_transform=True))
 
-        # augmentations.append(K.CenterCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
         augmentations.append(K.CenterCrop(size=self.cut_size, cropping_mode='resample', p=1.0, return_transform=True))
         augmentations.append(K.RandomPerspective(distortion_scale=0.1, p=0.7, return_transform=True))
         augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.5, return_transform=True))
@@ -239,28 +327,6 @@ class MakeCutouts(nn.Module):
         return batch
 
 # https://colab.research.google.com/drive/1qCpnXkBrT1ANHhMjP0LFCA3qV0RwM7yH#scrollTo=YHOj78Yvx8jP
-
-"""
-class MakeCutouts(nn.Module):
-    def __init__(self, cut_size, cutn, cut_pow=1.):
-        super().__init__()
-        self.cut_size = cut_size
-        self.cutn = cutn
-        self.cut_pow = cut_pow
-
-    def forward(self, input):
-        sideY, sideX = input.shape[2:4]
-        max_size = min(sideX, sideY)
-        min_size = min(sideX, sideY, self.cut_size)
-        cutouts = []
-        for _ in range(self.cutn):
-            size = int(torch.rand([])**self.cut_pow * (max_size - min_size) + min_size)
-            offsetx = torch.randint(0, sideX - size + 1, ())
-            offsety = torch.randint(0, sideY - size + 1, ())
-            cutout = input[:, :, offsety:offsety + size, offsetx:offsetx + size]
-            cutouts.append(F.adaptive_avg_pool2d(cutout, self.cut_size))
-        return torch.cat(cutouts)
-"""
 
 def resize_image(image, out_size):
     ratio = image.size[0] / image.size[1]
@@ -353,7 +419,7 @@ def do_init(args):
         cut_size = perceptor.visual.input_resolution
         cutoutSizeTable[clip_model] = cut_size
         if not cut_size in cutoutsTable:
-            make_cutouts = MakeCutouts(cut_size, args.num_cuts, cut_pow=args.cut_pow, clip_view=args.clip_view)
+            make_cutouts = MakeCutouts(cut_size, args.num_cuts, clip_view=args.clip_view)
             cutoutsTable[cut_size] = make_cutouts
 
     z_orig = drawer.get_z_copy()
@@ -809,7 +875,6 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-as",   "--auto_stop", type=bool, help="Auto stopping", default=False, dest='auto_stop')
     vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=None, dest='num_cuts')
     vq_parser.add_argument("-bats", "--batches", type=int, help="How many batches of cuts", default=1, dest='batches')
-    vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
     vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
     vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
     vq_parser.add_argument("-opath","--output_path", type=str, help="Output path", default="./", dest='output_path')
@@ -823,7 +888,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-smo",  "--smoothness", type=float, help="encourage smoothness, 0 -- skip", default=0, dest='smoothness')
     vq_parser.add_argument("-est",  "--smoothness_type", type=str, help="enforce smoothness type: default/clipped/log", default='default', dest='smoothness_type')
     vq_parser.add_argument("-sat",  "--saturation", type=float, help="encourage saturation, 0 -- skip", default=0, dest='saturation')
-    vq_parser.add_argument("-cview","--clip_view", type=float, help="spit out files showing what CLIP is seeing", default=False, dest='clip_view')
+    vq_parser.add_argument("-cview","--clip_view", type=float, help="Directory to spit out files showing what CLIP is seeing", default=None, dest='clip_view')
 
     return vq_parser
 
