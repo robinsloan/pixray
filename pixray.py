@@ -150,7 +150,7 @@ class MakeCutouts(nn.Module):
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
-        self.cutn_zoom = int(cutn * 0.75) # "dividing line" between zooms and wides
+        self.cutn_zoom = int(cutn * 0.666) # "dividing line" between zooms and wides
         self.cut_pow = cut_pow
         self.clip_view = clip_view
         self.transforms = None
@@ -213,7 +213,7 @@ class MakeCutouts(nn.Module):
             cutouts.append(cutout)
 
         if self.transforms is not None:
-            # print("Cached transforms available")
+            print("Using cached transforms for cutouts")
             batch1 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[:self.cutn_zoom], dim=0), self.transforms[:self.cutn_zoom],
                 (self.cut_size, self.cut_size), padding_mode=global_padding_mode)
             batch2 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[self.cutn_zoom:], dim=0), self.transforms[self.cutn_zoom:],
