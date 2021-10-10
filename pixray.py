@@ -144,14 +144,13 @@ class MyRandomPerspective(K.RandomPerspective):
         )
 
 class MakeCutouts(nn.Module):
-    def __init__(self, cut_size, cutn, cut_pow=1.):
+    def __init__(self, cut_size, cutn, clip_view=None):
         global global_aspect_width
 
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
         self.cutn_zoom = int(2*cutn/3)
-        self.cut_pow = cut_pow
         self.transforms = None
 
         augmentations = []
