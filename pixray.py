@@ -195,14 +195,10 @@ class MakeCutouts(nn.Module):
         max_size = min(sideX, sideY)
         min_size = min(sideX, sideY, self.cut_size)
         cutouts = []
-        mask_indexes = None
 
         for _ in range(self.cutn):
             # Pooling
             cutout = (self.av_pool(input) + self.max_pool(input))/2
-
-            if mask_indexes is not None:
-                cutout[0][mask_indexes] = 0.0 # 0.5
 
             if global_aspect_width != 1:
                 if global_aspect_width > 1:
@@ -225,6 +221,7 @@ class MakeCutouts(nn.Module):
             #         j_wide = j + self.cutn_zoom
             #         TF.to_pil_image(batch[j_wide].cpu()).save(f"cached_im_{cur_iteration:02d}_{j_wide:02d}_{spot}.png")
         else:
+            print("Using non-cached transforms for cutouts")
             batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
             batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
             batch = torch.cat([batch1, batch2])
@@ -234,8 +231,6 @@ class MakeCutouts(nn.Module):
             if self.clip_view and cur_iteration % 20 == 0:
                 for j in range(self.cutn):
                     TF.to_pil_image(batch[j].cpu()).save(f'/content/gdrive/MyDrive/pixray/clipview_{cur_iteration:02d}_cut_{j:02d}.png')
-
-        # print(batch.shape, self.transforms.shape)
 
         if self.noise_fac:
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
