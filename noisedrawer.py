@@ -39,7 +39,7 @@ class NoiseDrawer(DrawingInterface):
         self.canvas_height = settings.size[1]
         self.init_from_json = settings.init_from_json
 
-        if self.noise_density == None:
+        if settings.noise_density == None:
             self.noise_density = 0.08
         else:
             self.noise_density = settings.noise_density
