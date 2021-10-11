@@ -211,24 +211,17 @@ class MakeCutouts(nn.Module):
 
             cutouts.append(cutout)
 
-        print("Here is the value of self.transforms to start:")
-        print(self.transforms)
-
         if self.transforms is not None:
-            print("Using cached transforms, a surprise!")
             batch1 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[:self.cutn_zoom], dim=0), self.transforms[:self.cutn_zoom],
                 (self.cut_size, self.cut_size), padding_mode=global_padding_mode)
             batch2 = kornia.geometry.transform.warp_perspective(torch.cat(cutouts[self.cutn_zoom:], dim=0), self.transforms[self.cutn_zoom:],
                 (self.cut_size, self.cut_size), padding_mode='zeros')
             batch = torch.cat([batch1, batch2])
         else:
-            print("Using non-cached transforms")
             batch1, transforms1 = self.augs_zoom(torch.cat(cutouts[:self.cutn_zoom], dim=0))
             batch2, transforms2 = self.augs_wide(torch.cat(cutouts[self.cutn_zoom:], dim=0))
             batch = torch.cat([batch1, batch2])
             self.transforms = torch.cat([transforms1, transforms2])
-            print("Here is the value of self.transforms:")
-            print(self.transforms)
 
             if self.clip_view and cur_iteration % 50 == 0:
                 for j in range(self.cutn):
