@@ -192,8 +192,7 @@ class NoiseDrawer(DrawingInterface):
         return 5
 
     def synth(self, cur_iteration):
-        # damn I am glad I didn't have to figure this out myselfgroup.fill_color.data[:3].clamp_(0.0, 1.0)
-        group.fill_color.data[3].clamp_(1.0, 1.0)
+        # damn I am glad I didn't have to figure this out myself
         render = pydiffvg.RenderFunction.apply
         scene_args = pydiffvg.RenderFunction.serialize_scene(\
             self.canvas_width, self.canvas_height, self.shapes, self.shape_groups)
