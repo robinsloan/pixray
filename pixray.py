@@ -794,6 +794,7 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-est",  "--smoothness_type", type=str, help="enforce smoothness type: default/clipped/log", default='default', dest='smoothness_type')
     vq_parser.add_argument("-sat",  "--saturation", type=float, help="encourage saturation, 0 -- skip", default=0, dest='saturation')
     vq_parser.add_argument("-cview","--clip_view", type=float, help="Directory to spit out files showing what CLIP is seeing", default=None, dest='clip_view')
+    vq_parser.add_argument("-nd",   "--noise_density", type=float, help="Noise density for noisedrawer", default=0.08, dest='noise_density')
 
     return vq_parser
 

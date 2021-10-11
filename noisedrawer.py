@@ -38,6 +38,10 @@ class NoiseDrawer(DrawingInterface):
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
         self.init_from_json = settings.init_from_json
+        self.noise_density = settings.noise_density
+
+        if self.noise_density == None:
+            self.noise_density = 0.08
 
         canvas_width, canvas_height = self.canvas_width, self.canvas_height
 
@@ -72,7 +76,7 @@ class NoiseDrawer(DrawingInterface):
 
         else:
             # VERY important, determines density!
-            scaled_num_points = round(canvas_width * canvas_height / 12)
+            scaled_num_points = round(canvas_width * canvas_height * self.noise_density)
 
             blob_size = int(canvas_width * 0.2) # hard-coded, oh well
             blob_sigma = 0.8
@@ -187,7 +191,8 @@ class NoiseDrawer(DrawingInterface):
         return 5
 
     def synth(self, cur_iteration):
-        # damn I am glad I didn't have to figure this out myself
+        # damn I am glad I didn't have to figure this out myselfgroup.fill_color.data[:3].clamp_(0.0, 1.0)
+                group.fill_color.data[3].clamp_(1.0, 1.0)
         render = pydiffvg.RenderFunction.apply
         scene_args = pydiffvg.RenderFunction.serialize_scene(\
             self.canvas_width, self.canvas_height, self.shapes, self.shape_groups)
@@ -215,11 +220,8 @@ class NoiseDrawer(DrawingInterface):
         with torch.no_grad():
             for group in self.shape_groups[1:]:
                 if group.fill_color != None:
-                    group.fill_color.data.clamp_(0.0, 1.0)
-
-                    # REMEMBER YOU ARE CLAMPING ALPHA HERE
-                    # but I think that's what I want... no transparent dots
-                    group.fill_color.data[3] = 1.0
+                    group.fill_color.data[:3].clamp_(0.0, 1.0)
+                    group.fill_color.data[3].clamp_(1.0, 1.0) # clamp alpha
 
     def get_z(self):
         return None
