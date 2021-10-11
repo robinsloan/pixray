@@ -462,7 +462,7 @@ def checkin(args, iter, losses):
     timg = drawer.synth(cur_iteration)
     img = TF.to_pil_image(timg[0].cpu())
     # img = drawer.to_image()
-    output_with_iter = args.output.replace("ITER", cur_iteration)
+    output_with_iter = args.output.replace("ITER", str(cur_iteration))
     img.save(args.output_path + output_with_iter, pnginfo=info)
 
     if args.output_svg:
