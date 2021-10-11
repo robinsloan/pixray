@@ -14,6 +14,7 @@ import torchvision
 import torchvision.transforms as transforms
 import numpy as np
 import PIL.Image
+import PIL.ImageFilter
 import json
 
 from util import str2bool
@@ -21,10 +22,12 @@ from util import str2bool
 def bound(value, low, high):
     return max(low, min(high, value))
 
+def clamp(minimum, x, maximum):
+    return max(minimum, min(x, maximum))
+
 class NoiseDrawer(DrawingInterface):
     @staticmethod
     def add_settings(parser):
-        parser.add_argument("--num_points", type=int, help="number of points", default=8000, dest='num_points')
         parser.add_argument("--init_from_json", type=int, help="json points!", default=None, dest='init_from_json')
 
         return parser
@@ -34,22 +37,14 @@ class NoiseDrawer(DrawingInterface):
 
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
-        self.num_points = settings.num_points
         self.init_from_json = settings.init_from_json
 
-    def load_model(self, settings, device):
-        # Use GPU if available
-        pydiffvg.set_use_gpu(torch.cuda.is_available())
-        device = torch.device('cuda')
-        pydiffvg.set_device(device)
-
         canvas_width, canvas_height = self.canvas_width, self.canvas_height
-        num_points = self.num_points
 
         shapes = []
         shape_groups = []
 
-        # background
+        # background slate
         p0 = [0, 0]
         p1 = [canvas_width, canvas_height]
         path = pydiffvg.Rect(p_min=torch.tensor(p0), p_max=torch.tensor(p1))
@@ -76,32 +71,55 @@ class NoiseDrawer(DrawingInterface):
                     shape_groups.append(path_group)
 
         else:
+            # VERY important, determines density!
             scaled_num_points = round(canvas_width * canvas_height / 12)
-            blob_size = int(canvas_width * 0.2) # hard-coded, which is weird, but it's nice, sooo...
-            blob_sigma = 0.8
-            offset_x = canvas_width/2
-            offset_y = canvas_height/2
 
-            for p in range(scaled_num_points):
+            blob_size = int(canvas_width * 0.2) # hard-coded, oh well
+            blob_sigma = 0.8
+            center_x = canvas_width/2
+            center_y = canvas_height/2
+
+            """
+            init_image = PIL.Image.open("/content/gdrive/MyDrive/pixray/guide-tri.png")
+            init_image_rgb = init_image.convert('RGB')
+            init_image_rgb = init_image_rgb.resize((canvas_width, canvas_height), PIL.Image.LANCZOS)
+            init_image_rgb = init_image_rgb.filter(PIL.ImageFilter.GaussianBlur(radius = 32))
+            init_data = np.array(init_image_rgb)
+            """
+
+            num_points_placed = 0
+
+            while num_points_placed < scaled_num_points:
                 point_ids = []
                 point_radius = torch.tensor(0.5)
-                point_center = torch.tensor([offset_x + random.gauss(0, blob_sigma) * blob_size, \
-                                              offset_y + random.gauss(0, blob_sigma) * blob_size])
+                point_x = center_x + random.gauss(0, blob_sigma) * blob_size
+                point_y = center_y + random.gauss(0, blob_sigma) * blob_size
+                point_x = clamp(0, point_x, canvas_width-1)
+                point_y = clamp(0, point_y, canvas_height-1)
 
-                path = pydiffvg.Circle(radius = point_radius, center = point_center)
+                if False:
+                  orig_color = init_data[round(point_y), round(point_x), 1] # green only
+                  if orig_color < 128:
+                    continue # this one isn't suitable, too dark
+
+                point_center = torch.tensor([point_x, point_y])
+                path = pydiffvg.Circle(radius=point_radius, center=point_center)
                 shapes.append(path)
                 point_ids.append(len(shapes)-1)
+
                 point_color = torch.tensor([random.random(), random.random(), random.random(), 1.0])
-                path_group = pydiffvg.ShapeGroup(shape_ids = torch.tensor(point_ids), fill_color = point_color, stroke_color = None)
+
+                path_group = pydiffvg.ShapeGroup(shape_ids=torch.tensor(point_ids), fill_color=point_color, stroke_color=None)
                 shape_groups.append(path_group)
 
-        # Just some diffvg setup
+                num_points_placed += 1
+
+        # diffvg setup
         scene_args = pydiffvg.RenderFunction.serialize_scene(canvas_width, canvas_height, shapes, shape_groups)
         render = pydiffvg.RenderFunction.apply
         img = render(canvas_width, canvas_height, 2, 2, 0, None, *scene_args)
 
         points_vars = []
-        stroke_width_vars = []
         color_vars = []
 
         for path in shapes[1:]: # [1:] to exclude bg rect
@@ -134,6 +152,12 @@ class NoiseDrawer(DrawingInterface):
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
 
+    def load_model(self, settings, device):
+        # use GPU if available
+        pydiffvg.set_use_gpu(torch.cuda.is_available())
+        device = torch.device('cuda')
+        pydiffvg.set_device(device)
+
     def get_opts(self, decay_divisor):
         # optimizers
         points_optim = torch.optim.Adam(self.points_vars, lr=1.0/decay_divisor)
@@ -148,7 +172,7 @@ class NoiseDrawer(DrawingInterface):
         pass
 
     def init_from_tensor(self, init_tensor):
-        # nah
+        # TODO
         pass
 
     def reapply_from_tensor(self, new_tensor):
@@ -163,6 +187,7 @@ class NoiseDrawer(DrawingInterface):
         return 5
 
     def synth(self, cur_iteration):
+        # damn I am glad I didn't have to figure this out myself
         render = pydiffvg.RenderFunction.apply
         scene_args = pydiffvg.RenderFunction.serialize_scene(\
             self.canvas_width, self.canvas_height, self.shapes, self.shape_groups)
@@ -191,9 +216,10 @@ class NoiseDrawer(DrawingInterface):
             for group in self.shape_groups[1:]:
                 if group.fill_color != None:
                     group.fill_color.data.clamp_(0.0, 1.0)
-                    # avg_amount = torch.mean(group.fill_color.data[:3])
-                    # group.fill_color.data[:3] = avg_amount
-                    # group.fill_color.data = torch.round(group.fill_color.data)
+
+                    # REMEMBER YOU ARE CLAMPING ALPHA HERE
+                    # but I think that's what I want... no transparent dots
+                    group.fill_color.data[3] = 1.0
 
     def get_z(self):
         return None
