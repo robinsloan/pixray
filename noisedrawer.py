@@ -76,29 +76,24 @@ class NoiseDrawer(DrawingInterface):
                     shape_groups.append(path_group)
 
         else:
-            num_blobs = 1
-            points_per_blob = round(num_points / num_blobs)
-            blob_size = 60.0 # hard-coded, which is weird, but it's nice, sooo...
+            scaled_num_points = round(canvas_width * canvas_height / 12)
+            blob_size = int(canvas_width * 0.2) # hard-coded, which is weird, but it's nice, sooo...
             blob_sigma = 0.8
-            for b in range(num_blobs):
-                offset_x = canvas_width/2
-                offset_y = canvas_height/2
-                if b > 0:
-                  offset_x += round(random.gauss(0, blob_sigma)) * canvas_width/4
-                  offset_y += round(random.gauss(0, blob_sigma)) * canvas_height/4
+            offset_x = canvas_width/2
+            offset_y = canvas_height/2
 
-                for p in range(points_per_blob):
-                    point_ids = []
-                    point_radius = torch.tensor(0.5)
-                    point_center = torch.tensor([offset_x + random.gauss(0, blob_sigma) * blob_size, \
-                                                 offset_y + random.gauss(0, blob_sigma) * blob_size])
+            for p in range(scaled_num_points):
+                point_ids = []
+                point_radius = torch.tensor(0.5)
+                point_center = torch.tensor([offset_x + random.gauss(0, blob_sigma) * blob_size, \
+                                              offset_y + random.gauss(0, blob_sigma) * blob_size])
 
-                    path = pydiffvg.Circle(radius = point_radius, center = point_center)
-                    shapes.append(path)
-                    point_ids.append(len(shapes)-1)
-                    point_color = torch.tensor([random.random(), random.random(), random.random(), 1.0])
-                    path_group = pydiffvg.ShapeGroup(shape_ids = torch.tensor(point_ids), fill_color = point_color, stroke_color = None)
-                    shape_groups.append(path_group)
+                path = pydiffvg.Circle(radius = point_radius, center = point_center)
+                shapes.append(path)
+                point_ids.append(len(shapes)-1)
+                point_color = torch.tensor([random.random(), random.random(), random.random(), 1.0])
+                path_group = pydiffvg.ShapeGroup(shape_ids = torch.tensor(point_ids), fill_color = point_color, stroke_color = None)
+                shape_groups.append(path_group)
 
         # Just some diffvg setup
         scene_args = pydiffvg.RenderFunction.serialize_scene(canvas_width, canvas_height, shapes, shape_groups)
@@ -128,6 +123,9 @@ class NoiseDrawer(DrawingInterface):
                 group.fill_color.requires_grad = True
                 color_vars.append(group.fill_color)
 
+        print("color_vars length:")
+        print(len(color_vars))
+
         self.points_vars = points_vars
         self.color_vars = color_vars
         self.img = img
@@ -150,7 +148,7 @@ class NoiseDrawer(DrawingInterface):
         pass
 
     def init_from_tensor(self, init_tensor):
-        # TODO
+        # nah
         pass
 
     def reapply_from_tensor(self, new_tensor):
@@ -178,6 +176,7 @@ class NoiseDrawer(DrawingInterface):
 
     @torch.no_grad()
     def to_image(self):
+        print("called to_image... surprising!")
         img = self.img.detach().cpu().numpy()[0]
         img = np.transpose(img, (1, 2, 0))
         img = np.clip(img, 0, 1)
@@ -192,6 +191,9 @@ class NoiseDrawer(DrawingInterface):
             for group in self.shape_groups[1:]:
                 if group.fill_color != None:
                     group.fill_color.data.clamp_(0.0, 1.0)
+                    # avg_amount = torch.mean(group.fill_color.data[:3])
+                    # group.fill_color.data[:3] = avg_amount
+                    # group.fill_color.data = torch.round(group.fill_color.data)
 
     def get_z(self):
         return None
