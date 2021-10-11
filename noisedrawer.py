@@ -38,10 +38,11 @@ class NoiseDrawer(DrawingInterface):
         self.canvas_width = settings.size[0]
         self.canvas_height = settings.size[1]
         self.init_from_json = settings.init_from_json
-        self.noise_density = settings.noise_density
 
         if self.noise_density == None:
             self.noise_density = 0.08
+        else:
+            self.noise_density = settings.noise_density
 
         canvas_width, canvas_height = self.canvas_width, self.canvas_height
 
@@ -192,7 +193,7 @@ class NoiseDrawer(DrawingInterface):
 
     def synth(self, cur_iteration):
         # damn I am glad I didn't have to figure this out myselfgroup.fill_color.data[:3].clamp_(0.0, 1.0)
-                group.fill_color.data[3].clamp_(1.0, 1.0)
+        group.fill_color.data[3].clamp_(1.0, 1.0)
         render = pydiffvg.RenderFunction.apply
         scene_args = pydiffvg.RenderFunction.serialize_scene(\
             self.canvas_width, self.canvas_height, self.shapes, self.shape_groups)
