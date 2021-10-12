@@ -274,8 +274,8 @@ def rebuild_optimisers(args):
 
 def do_init(args):
     global opts, perceptors, normalize, cutoutsTable, cutoutSizeTable
-    global z_orig, z_targets, z_labels, init_image_tensor, target_image_tensor
-    global gside_X, gside_Y, overlay_image_rgba
+    global z_orig, z_targets, z_labels
+    global gside_X, gside_Y
     global pmsTable, pmsImageTable, pImages, device, spotPmsTable, spotOffPmsTable
     global drawer
 
@@ -373,11 +373,6 @@ def do_init(args):
 
     for clip_model in args.clip_models:
         pImages = pmsImageTable[clip_model]
-        for path in args.image_prompts:
-            img = Image.open(path)
-            pil_image = img.convert('RGB')
-            img = resize_image(pil_image, (sideX, sideY))
-            pImages.append(TF.to_tensor(img).unsqueeze(0).to(device))
 
     opts = rebuild_optimisers(args)
 
@@ -387,8 +382,6 @@ def do_init(args):
 
     if args.prompts:
         print('Using text prompts:', args.prompts)
-    if args.image_prompts:
-        print('Using #image prompts:', len(args.image_prompts))
 
 # dreaded globals (for now)
 z_orig = None
@@ -400,15 +393,12 @@ perceptors = {}
 normalize = None
 cutoutsTable = {}
 cutoutSizeTable = {}
-init_image_tensor = None
-target_image_tensor = None
 pmsTable = None
 spotPmsTable = None
 spotOffPmsTable = None
 pmsImageTable = None
 gside_X=None
 gside_Y=None
-overlay_image_rgba=None
 device=None
 cur_iteration=None
 cur_anim_index=None
@@ -486,7 +476,7 @@ def checkin(args, iter, losses):
 
 def ascend_txt(args):
     global cur_iteration, cur_anim_index, perceptors, normalize, cutoutsTable, cutoutSizeTable
-    global z_orig, z_targets, z_labels, init_image_tensor, target_image_tensor, drawer
+    global z_orig, z_targets, z_labels, drawer
     global pmsTable, pmsImageTable, spotPmsTable, spotOffPmsTable, global_padding_mode
 
     out = drawer.synth(cur_iteration);
@@ -522,18 +512,11 @@ def ascend_txt(args):
         for timg in pImages:
             # note: this caches and reuses the transforms - a bit of a hack but it works
 
-            if args.image_prompt_shuffle:
-                # print("Disabling cached transforms")
-                make_cutouts.transforms = None
-
             # print("Building throwaway image prompts")
             # new way builds throwaway Prompts
             batch = make_cutouts(timg)
             embed = perceptor.encode_image(normalize(batch)).float()
-            if args.image_prompt_weight is not None:
-                transient_pMs.append(Prompt(embed, args.image_prompt_weight).to(device))
-            else:
-                transient_pMs.append(Prompt(embed).to(device))
+            transient_pMs.append(Prompt(embed).to(device))
 
         for prompt in transient_pMs:
             result.append(prompt(iii))
@@ -546,20 +529,6 @@ def ascend_txt(args):
         diffs = _pixels - target_palette[best_guesses]
         palette_loss = torch.mean( torch.norm( diffs, 2, dim=1 ) )*cur_cutouts[cutoutSize].shape[0]
         result.append( palette_loss*cur_iteration/args.enforce_palette_annealing )
-
-    if args.smoothness > 0 and args.smoothness_type:
-        _pixels = cur_cutouts[cutoutSize].permute(0,2,3,1).reshape(-1,cur_cutouts[cutoutSize].shape[2],3)
-        gyr, gxr = torch.gradient(_pixels[:,:,0])
-        gyg, gxg = torch.gradient(_pixels[:,:,1])
-        gyb, gxb = torch.gradient(_pixels[:,:,2])
-        sharpness = torch.sqrt(gyr**2 + gxr**2+ gyg**2 + gxg**2 + gyb**2 + gxb**2)
-        if args.smoothness_type=='clipped':
-            sharpness = torch.clamp( sharpness, max=0.5 )
-        elif args.smoothness_type=='log':
-            sharpness = torch.log( torch.ones_like(sharpness)+sharpness )
-        sharpness = torch.mean( sharpness )
-
-        result.append( sharpness*args.smoothness )
 
     if args.saturation:
         # based on the old "percepted colourfulness" heuristic from Hasler and Süsstrunk’s 2003 paper
@@ -581,57 +550,10 @@ def ascend_txt(args):
         make_cutouts.transforms = None
 
     # main init_weight uses spherical loss
-    if args.target_images is not None and args.target_image_weight > 0:
-        if cur_anim_index is None:
-            cur_z_targets = z_targets
-        else:
-            cur_z_targets = [ z_targets[cur_anim_index] ]
-        for z_target in cur_z_targets:
-            f_z = drawer.get_z()
-            if f_z is not None:
-                f = f_z.reshape(1,-1)
-                f2 = z_target.reshape(1,-1)
-                cur_loss = spherical_dist_loss(f, f2) * args.target_image_weight
-                result.append(cur_loss)
-
-    if args.target_weight_pix:
-        if target_image_tensor is None:
-            print("OOPS TIT is 0")
-        else:
-            cur_loss = F.l1_loss(out, target_image_tensor) * args.target_weight_pix
-            result.append(cur_loss)
-
-    if args.image_labels is not None:
-        for z_label in z_labels:
-            f = drawer.get_z().reshape(1,-1)
-            f2 = z_label.reshape(1,-1)
-            cur_loss = spherical_dist_loss(f, f2) * args.image_label_weight
-            result.append(cur_loss)
-
-    # main init_weight uses spherical loss
     if args.init_weight:
         f = drawer.get_z().reshape(1,-1)
         f2 = z_orig.reshape(1,-1)
         cur_loss = spherical_dist_loss(f, f2) * args.init_weight
-        result.append(cur_loss)
-
-    # these three init_weight variants offer mse_loss, mse_loss in pixel space, and cos loss
-    if args.init_weight_dist:
-        cur_loss = F.mse_loss(z, z_orig) * args.init_weight_dist / 2
-        result.append(cur_loss)
-
-    if args.init_weight_pix:
-        if init_image_tensor is None:
-            print("OOPS IIT is 0")
-        else:
-            cur_loss = F.l1_loss(out, init_image_tensor) * args.init_weight_pix / 2
-            result.append(cur_loss)
-
-    if args.init_weight_cos:
-        f = drawer.get_z().reshape(1,-1)
-        f2 = z_orig.reshape(1,-1)
-        y = torch.ones_like(f[0])
-        cur_loss = F.cosine_embedding_loss(f, f2, y) * args.init_weight_cos
         result.append(cur_loss)
 
     return result
@@ -643,10 +565,6 @@ def re_average_z(args):
     # old_z = z.clone()
     cur_z_image = drawer.to_image()
     cur_z_image = cur_z_image.convert('RGB')
-    if overlay_image_rgba:
-        # print("applying overlay image")
-        cur_z_image.paste(overlay_image_rgba, (0, 0), overlay_image_rgba)
-        cur_z_image.save("overlaid.png")
     cur_z_image = cur_z_image.resize((gside_X, gside_Y), Image.LANCZOS)
     drawer.reapply_from_tensor(TF.to_tensor(cur_z_image).to(device).unsqueeze(0) * 2 - 1)
 
@@ -753,11 +671,6 @@ def setup_parser(vq_parser):
     # Add the arguments
     vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default=[], dest='prompts')
     vq_parser.add_argument("-vp",   "--vector_prompts", type=str, help="Vector prompts", default=[], dest='vector_prompts')
-    vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts", default=[], dest='image_prompts')
-    vq_parser.add_argument("-ipw",  "--image_prompt_weight", type=float, help="Weight for image prompt", default=None, dest='image_prompt_weight')
-    vq_parser.add_argument("-ips",  "--image_prompt_shuffle", type=bool, help="Shuffle image prompts", default=False, dest='image_prompt_shuffle')
-    vq_parser.add_argument("-il",   "--image_labels", type=str, help="Image prompts", default=None, dest='image_labels')
-    vq_parser.add_argument("-ilw",  "--image_label_weight", type=float, help="Weight for image prompt", default=1.0, dest='image_label_weight')
     vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterations", default=None, dest='iterations')
     vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=10, dest='save_every')
     vq_parser.add_argument("-de",   "--display_every", type=int, help="Display image iterations", default=20, dest='display_every')
@@ -767,9 +680,6 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-ezs",  "--ezsize", type=str, help="small, medium, large", default=None, dest='ezsize')
     vq_parser.add_argument("-sca",  "--scale", type=float, help="scale (instead of ezsize)", default=None, dest='scale')
     vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=None, dest='size')
-    vq_parser.add_argument("-ti",   "--target_images", type=str, help="Target images", default=None, dest='target_images')
-    vq_parser.add_argument("-tiw",  "--target_image_weight", type=float, help="Target images weight", default=1.0, dest='target_image_weight')
-    vq_parser.add_argument("-twp",  "--target_weight_pix", type=float, help="Target weight pix loss", default=0., dest='target_weight_pix')
     vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight (main=spherical)", default=None, dest='init_weight')
     vq_parser.add_argument("-iwd",  "--init_weight_dist", type=float, help="Initial weight dist loss", default=0., dest='init_weight_dist')
     vq_parser.add_argument("-iwc",  "--init_weight_cos", type=float, help="Initial weight cos loss", default=0., dest='init_weight_cos')
@@ -790,8 +700,6 @@ def setup_parser(vq_parser):
     vq_parser.add_argument("-epw",  "--enforce_palette_annealing", type=int, help="enforce palette annealing, 0 -- skip", default=5000, dest='enforce_palette_annealing')
     vq_parser.add_argument("-tp",   "--target_palette", type=str, help="target palette", default=None, dest='target_palette')
     vq_parser.add_argument("-tpl",  "--target_palette_length", type=int, help="target palette length", default=16, dest='target_palette_length')
-    vq_parser.add_argument("-smo",  "--smoothness", type=float, help="encourage smoothness, 0 -- skip", default=0, dest='smoothness')
-    vq_parser.add_argument("-est",  "--smoothness_type", type=str, help="enforce smoothness type: default/clipped/log", default='default', dest='smoothness_type')
     vq_parser.add_argument("-sat",  "--saturation", type=float, help="encourage saturation, 0 -- skip", default=0, dest='saturation')
     vq_parser.add_argument("-cview","--clip_view", type=float, help="Directory to spit out files showing what CLIP is seeing", default=None, dest='clip_view')
     vq_parser.add_argument("-nd",   "--noise_density", type=float, help="Noise density for noisedrawer", default=0.08, dest='noise_density')
@@ -896,10 +804,6 @@ def process_args(vq_parser, namespace=None):
     # Split text prompts using the pipe character
     if args.prompts:
         args.prompts = [phrase.strip() for phrase in args.prompts.split("|")]
-
-    # Split target images using the pipe character
-    if args.image_prompts:
-        args.image_prompts = real_glob(args.image_prompts)
 
     # Split text prompts using the pipe character
     if args.vector_prompts:
