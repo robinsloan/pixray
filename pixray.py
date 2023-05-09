@@ -131,17 +131,6 @@ def parse_prompt(prompt):
 
 from typing import cast, Dict, List, Optional, Tuple, Union
 
-# override class to get padding_mode
-class MyRandomPerspective(K.RandomPerspective):
-    def apply_transform(
-        self, input: torch.Tensor, params: Dict[str, torch.Tensor], transform: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
-        _, _, height, width = input.shape
-        transform = cast(torch.Tensor, transform)
-        return kornia.geometry.warp_perspective(
-            input, transform, (height, width), align_corners=self.align_corners, padding_mode=global_padding_mode
-        )
-
 class MakeCutouts(nn.Module):
     def __init__(self, cut_size, cutn, clip_view=None):
         global global_aspect_width
@@ -156,7 +145,7 @@ class MakeCutouts(nn.Module):
         augmentations = []
         if global_aspect_width != 1:
             augmentations.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=1.0, cropping_mode="resample", return_transform=True))
-        augmentations.append(MyRandomPerspective(distortion_scale=0.2, p=0.7, return_transform=True))
+        augmentations.append(K.RandomPerspective(distortion_scale=0.2, p=0.7, return_transform=True))
         augmentations.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,0.8),  ratio=(0.8,1.2), cropping_mode='resample', p=0.7, return_transform=True))
         augmentations.append(K.ColorJitter(hue=0.1, saturation=0.1, p=0.7, return_transform=True))
         self.augs_zoom = nn.Sequential(*augmentations)
