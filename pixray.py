@@ -139,8 +139,7 @@ class MyRandomPerspective(K.RandomPerspective):
         _, _, height, width = input.shape
         transform = cast(torch.Tensor, transform)
         return kornia.geometry.warp_perspective(
-            input, transform, (height, width),
-             mode=self.resample.name.lower(), align_corners=self.align_corners, padding_mode=global_padding_mode
+            input, transform, (height, width), align_corners=self.align_corners, padding_mode=global_padding_mode
         )
 
 class MakeCutouts(nn.Module):
