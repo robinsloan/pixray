@@ -299,6 +299,10 @@ def do_init(args):
     num_resolutions = drawer.get_num_resolutions()
 
     jit = True if float(torch.__version__[:3]) < 1.8 else False
+    # RS PATCH
+    # per https://github.com/mfrashad/text2art/issues/5
+    jit = False
+    
     f = 2**(num_resolutions - 1)
 
     toksX, toksY = args.size[0] // f, args.size[1] // f
