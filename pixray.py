@@ -308,6 +308,8 @@ def do_init(args):
         download_root = "/content/gdrive/MyDrive/pixray"
     if os.path.exists("/home/robin/pixray/models"):
         download_root = "/home/robin/pixray/models"
+    if os.path.exists("/home/robin/clash-share/pixray/models"):
+        download_root = "/home/robin/clash-share/pixray/models"
 
     for clip_model in args.clip_models:
         perceptor = clip.load(clip_model, jit=jit, download_root=download_root)[0].eval().requires_grad_(False).to(device)
